@@ -1,0 +1,209 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>VulnFix-AI Security Scanner</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 40px; 
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { 
+            color: #2c3e50; 
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        textarea { 
+            width: 100%; 
+            height: 200px; 
+            margin: 10px 0; 
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        button { 
+            padding: 12px 30px; 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            border-radius: 5px;
+            cursor: pointer; 
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        .result { 
+            margin-top: 20px; 
+            padding: 20px; 
+            border-radius: 5px; 
+            display: none;
+        }
+        .vulnerable { 
+            background: #ffebee; 
+            border-left: 4px solid #e74c3c; 
+        }
+        .safe { 
+            background: #e8f5e8; 
+            border-left: 4px solid #2ecc71; 
+        }
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+        }
+        .example {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        .example:hover {
+            background: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 VulnFix-AI Security Scanner</h1>
+        <p>AI-powered vulnerability detection and automated fix generation</p>
+        
+        <div class="example" onclick="loadExample(1)">
+            <strong>Example 1:</strong> SQL Injection with string concatenation
+        </div>
+        <div class="example" onclick="loadExample(2)">
+            <strong>Example 2:</strong> SQL Injection with f-strings
+        </div>
+        <div class="example" onclick="loadExample(3)">
+            <strong>Example 3:</strong> Multiple concatenation vulnerability
+        </div>
+        
+        <textarea id="codeInput" placeholder="Paste your Python code here... Or click examples above."></textarea>
+        <br>
+        <button onclick="analyzeCode()">🔍 Analyze Code</button>
+        <button onclick="clearCode()">🗑️ Clear</button>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <p>🔄 Analyzing code for vulnerabilities...</p>
+        </div>
+        
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        const examples = {
+            1: `def login_user(username, password):
+    cursor.execute("SELECT * FROM users WHERE username = '" + username + "' AND password = '" + password + "'")
+    return cursor.fetchone()`,
+            
+            2: `def search_products(keyword):
+    query = f"SELECT * FROM products WHERE name LIKE '%{keyword}%'"
+    cursor.execute(query)
+    return cursor.fetchall()`,
+            
+            3: `def update_user(user_id, new_email):
+    cursor.execute("UPDATE users SET email = '" + new_email + "' WHERE id = " + user_id)`
+        };
+
+        function loadExample(num) {
+            document.getElementById('codeInput').value = examples[num];
+        }
+
+        function clearCode() {
+            document.getElementById('codeInput').value = '';
+            document.getElementById('result').style.display = 'none';
+        }
+
+        async function analyzeCode() {
+            const code = document.getElementById('codeInput').value;
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            
+            if (!code.trim()) {
+                alert('Please enter some code to analyze.');
+                return;
+            }
+            
+            // Show loading, hide previous results
+            loadingDiv.style.display = 'block';
+            resultDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('http://localhost:8002/analyze', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        code: code, 
+                        language: 'python' 
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Hide loading
+                loadingDiv.style.display = 'none';
+                
+                if (data.status === 'success') {
+                    const analysis = data.analysis;
+                    resultDiv.className = analysis.risk_level === 'High' ? 'result vulnerable' : 'result safe';
+                    resultDiv.innerHTML = `
+                        <h3>🔍 Security Analysis Results</h3>
+                        <p><strong>🚨 Vulnerability:</strong> ${analysis.vulnerability}</p>
+                        <p><strong>⚠️ Risk Level:</strong> ${analysis.risk_level}</p>
+                        <p><strong>📝 Explanation:</strong> ${analysis.explanation}</p>
+                        <p><strong>✅ Fixed Code:</strong></p>
+                        <pre style="background: white; padding: 15px; border-radius: 5px; border: 1px solid #ddd; overflow-x: auto;">${analysis.fixed_code}</pre>
+                        ${analysis.recommendation ? `<p><strong>💡 Recommendation:</strong> ${analysis.recommendation}</p>` : ''}
+                    `;
+                    resultDiv.style.display = 'block';
+                } else {
+                    resultDiv.innerHTML = '<p style="color: red;">Error: ' + (data.detail || 'Unknown error') + '</p>';
+                    resultDiv.style.display = 'block';
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                resultDiv.innerHTML = `
+                    <div style="color: red;">
+                        <p><strong>❌ Connection Error</strong></p>
+                        <p>Failed to connect to VulnFix-AI API server.</p>
+                        <p><strong>Make sure:</strong></p>
+                        <ul>
+                            <li>API server is running: <code>python api_server.py</code></li>
+                            <li>Server is on port 8002</li>
+                            <li>No firewall blocking the connection</li>
+                        </ul>
+                        <p>Error details: ${error.message}</p>
+                    </div>
+                `;
+                resultDiv.style.display = 'block';
+            }
+        }
+
+        // Allow pressing Enter in textarea (with Ctrl/Cmd)
+        document.getElementById('codeInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                analyzeCode();
+            }
+        });
+    </script>
+</body>
+</html>
